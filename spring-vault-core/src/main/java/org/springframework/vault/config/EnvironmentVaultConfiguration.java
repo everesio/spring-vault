@@ -15,8 +15,6 @@
  */
 package org.springframework.vault.config;
 
-import java.net.URI;
-
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -31,19 +29,25 @@ import org.springframework.vault.authentication.AppRoleAuthentication;
 import org.springframework.vault.authentication.AppRoleAuthenticationOptions;
 import org.springframework.vault.authentication.AwsEc2Authentication;
 import org.springframework.vault.authentication.AwsEc2AuthenticationOptions;
+import org.springframework.vault.authentication.AwsEc2AuthenticationOptions.AwsEc2AuthenticationOptionsBuilder;
 import org.springframework.vault.authentication.ClientAuthentication;
 import org.springframework.vault.authentication.ClientCertificateAuthentication;
 import org.springframework.vault.authentication.CubbyholeAuthentication;
 import org.springframework.vault.authentication.CubbyholeAuthenticationOptions;
 import org.springframework.vault.authentication.IpAddressUserId;
+import org.springframework.vault.authentication.KubernetesAuthentication;
+import org.springframework.vault.authentication.KubernetesAuthenticationOptions;
+import org.springframework.vault.authentication.KubernetesJwtProvider;
 import org.springframework.vault.authentication.MacAddressUserId;
 import org.springframework.vault.authentication.StaticUserId;
 import org.springframework.vault.authentication.TokenAuthentication;
-import org.springframework.vault.authentication.AwsEc2AuthenticationOptions.AwsEc2AuthenticationOptionsBuilder;
+import org.springframework.vault.authentication.TokenFile;
 import org.springframework.vault.client.VaultEndpoint;
 import org.springframework.vault.support.SslConfiguration;
 import org.springframework.vault.support.VaultToken;
 import org.springframework.web.client.RestOperations;
+
+import java.net.URI;
 
 /**
  * Configuration using Spring's {@link org.springframework.core.env.Environment} to
@@ -205,6 +209,8 @@ public class EnvironmentVaultConfiguration extends AbstractVaultConfiguration im
 			return new ClientCertificateAuthentication(restOperations());
 		case CUBBYHOLE:
 			return cubbyholeAuthentication();
+        case KUBERNETES:
+            return kubernetesAuthentication();
 
 		default:
 			throw new IllegalStateException(String.format(
@@ -306,6 +312,22 @@ public class EnvironmentVaultConfiguration extends AbstractVaultConfiguration im
 		return new CubbyholeAuthentication(options, restOperations());
 	}
 
+    protected ClientAuthentication kubernetesAuthentication() {
+
+        String role = getProperty("vault.kubernetes.role");
+
+        Assert.hasText(role,
+                "Vault Kubernetes authentication: role must not be empty");
+
+        KubernetesJwtProvider jwtProvider = new TokenFile("/var/run/secrets/kubernetes.io/serviceaccount/token");
+        KubernetesAuthenticationOptions authenticationOptions = KubernetesAuthenticationOptions
+                .builder().role(role)
+                .jwtProvider(jwtProvider)
+                .build();
+
+        return new KubernetesAuthentication(authenticationOptions, restOperations());
+    }
+
 	private String getProperty(String key) {
 		return getEnvironment().getProperty(key);
 	}
@@ -321,6 +343,6 @@ public class EnvironmentVaultConfiguration extends AbstractVaultConfiguration im
 	}
 
 	enum AuthenticationMethod {
-		TOKEN, APPID, APPROLE, AWS_EC2, CERT, CUBBYHOLE;
+		TOKEN, APPID, APPROLE, AWS_EC2, CERT, CUBBYHOLE, KUBERNETES;
 	}
 }
